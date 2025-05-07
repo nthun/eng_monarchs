@@ -1,0 +1,135 @@
+---
+title: "English Mondarchs and merriages"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(performance)
+library(sjPlot)
+
+theme_set(theme_light())
+```
+
+
+```{r}
+monarchs_raw <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2024/2024-08-20/english_monarchs_marriages_df.csv')
+
+monarchs <-
+    monarchs_raw |> 
+    mutate(king_age  = parse_number(king_age)) |> 
+    mutate(across(c(consort_age, year_of_marriage), parse_number)) |> 
+    mutate(consort_name = na_if(consort_name, "–")) |> 
+    rename(ruler_name = king_name,
+           ruler_age = king_age) |> 
+    mutate(age_diff = ruler_age - consort_age) |> 
+    mutate(century_of_marriage = year_of_marriage/100)
+
+glimpse(monarchs)
+```
+
+## How many unique kings there are
+
+
+```{r}
+unique(monarchs$ruler_name)
+```
+
+
+## How many wives each king had, and how many had multiple wives?
+
+```{r}
+monarchs |> 
+    count(ruler_name, sort = TRUE)
+    
+monarchs |> 
+    count(ruler_name, sort = TRUE) |> 
+    count(n)
+    
+```
+
+# Age of kings and consorts at the 
+
+```{r}
+monarchs |> 
+    pivot_longer(c(ruler_age, consort_age)) |> 
+    ggplot() +
+    aes(x = value, fill = name) +
+    geom_histogram() +
+    facet_grid(~name)
+    
+    
+monarchs |> 
+    pivot_longer(c(ruler_age, consort_age)) |> 
+    ggplot() +
+    aes(x = value, fill = name) +
+    geom_histogram(position = "identity", alpha = .5)
+
+monarchs |> 
+    filter(age_diff >= 35)
+
+    
+```
+
+
+## Top and bottom 5 extreme age differences
+
+```{r}
+monarchs |> 
+    drop_na() |> 
+    arrange(age_diff) |> 
+    slice(1:5, (n()-4):n()) |> 
+    mutate(ruler_name = fct_reorder(ruler_name, age_diff)) |> 
+    ggplot() +
+    aes(y = ruler_name, x = age_diff, fill = age_diff < 0) +
+    geom_col() +
+    labs(y = NULL, x = "Age difference", fill = "Older than the consort?",
+         title = "Top and bottom 5 extreme age differences of English monarchs")
+
+
+monarchs |> 
+    drop_na() |> 
+    mutate(ruler_name = fct_reorder(ruler_name, age_diff)) |> 
+    ggplot() +
+    aes(y = ruler_name) +
+    geom_point(aes(x = ruler_age), color = "blue") +
+    geom_point(aes(x = consort_age), color = "red") +
+    labs(y = NULL, x = "Ruler age",
+         title = "")
+
+```
+
+
+# Age difference by year of marriage
+
+```{r}
+
+monarchs |> 
+    ggplot() +
+    aes(x = year_of_marriage, y = age_diff) +
+    geom_point() +
+    geom_smooth(method = "lm")
+
+
+```
+
+# Which variables predict age difference?
+
+```{r}
+agediff_model <- 
+    lm(age_diff ~ century_of_marriage + ruler_age, data = monarchs)
+
+summary(agediff_model)
+
+check_collinearity(agediff_model)
+check_heteroscedasticity(agediff_model)
+check_normality(agediff_model)
+
+tab_model(agediff_model, show.stat = TRUE, show.aic = TRUE, show.se = TRUE, show.ci = FALSE)
+
+```
+
+
+
